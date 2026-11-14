@@ -199,6 +199,12 @@ var gaveUp             : bool  = false
 var decide         : Control = null
 # Current audio playback time (seconds)
 var currentSongPos : float   = 0.0
+# When currentSongPos was read (usec): an input is judged at its own time, back from this one
+var frameUsec      : int     = 0
+# Presses and releases since the last frame, in order: [usec, lane, pressed]
+var inputEvents    : Array   = []
+# State of the key actions (keycodes, then Scratch-) as last seen by _input, an action bound twice only counts once
+var heldActions    : Array   = [false, false, false, false, false, false, false, false, false]
 # Time until game ends (in seconds)
 var endPos         : float   = 0.0
 
@@ -430,6 +436,7 @@ func start() -> void:
 	if keysoundPlayer:
 		if not keysoundPlayer.playing:
 			keysoundPlayer.play()
+	resetInputs()
 	startUsec = Time.get_ticks_usec()
 	set_process(true)
 
@@ -596,6 +603,9 @@ func _process(delta) -> void:
 		hitFlash[i] = maxf(hitFlash[i] - delta * HIT_FLASH_DECAY, 0.0)
 	# Get current audio playback time
 	currentSongPos = songPosition()
+	frameUsec = Time.get_ticks_usec()
+	var events : Array = inputEvents
+	inputEvents = []
 	# The notes come later when the sound is late (output latency and user offset)
 	currentSongPos -= (AudioServer.get_output_latency() + Global.audio_offset / 1000.0 + Training.audio_delay()) * playRate
 	# Confirm game end
@@ -666,7 +676,7 @@ func _process(delta) -> void:
 	# Assign points to all notes in the queue
 	updateQueue()
 	# Input verification and [Failure while holding down long note] processing
-	updateInputState()
+	updateInputState(events)
 	# [Failure to press at all, normal note and long note] Processing
 	dequeue()
 	# Delete all notes that are outside the screen
@@ -710,8 +720,10 @@ func keyPressed(i : int) -> bool:
 	# The long note is already held (analog turntable)
 	if shouldPress[i]:
 		return true
-	# If the first note in that channel is scored
-	if len(queue[i]) != 0 and queue[i][0].score != "Default":
+	# The first note of the lane is judged at the time of the press, which can be before the frame
+	var judgement : String = Judge.judge(currentSongPos - queue[i][0].hitTime) if queue[i] else ""
+	if judgement != "":
+		queue[i][0].score = judgement
 		showTiming(queue[i][0])
 		hitFlash[i] = 1.0
 		# The keysound plays even for a bad timing like in IIDX
@@ -952,29 +964,59 @@ func spinDisc(delta : float) -> void:
 		turns = DISC_SPEED_FWD if scratchDirection > 0 else DISC_SPEED_REW
 	disc.rotation += TAU * turns * delta
 
-func updateInputState() -> void:
-	updateAnalogScratch()
+# The keys are read in _input() and not once per frame: each press is timed when Godot gives it,
+# it matters when the main loop runs faster than the screen (see Global.set_game_loop())
+func _input(event : InputEvent) -> void:
+	if not is_processing() or event.is_echo() or event is InputEventMouse:
+		return
+	var usec : int = Time.get_ticks_usec()
+	for a in range(heldActions.size()):
+		var action : String = keycodes[a] if a < 8 else prefix + "digital_turntable_rew"
+		if not event.is_action(action):
+			continue
+		# Input has already applied the event: an action with two bindings changes only once
+		var held : bool = Input.is_action_pressed(action)
+		if held != heldActions[a]:
+			heldActions[a] = held
+			inputEvents.append([usec, mini(a, 7), held])
 
-	if (Input.is_action_just_pressed(prefix + "digital_turntable_rew")) and not adjusting:
-		if not keyPressed(7):
-			emptyPress(7)
+# Keys already held when the play starts are not presses
+func resetInputs() -> void:
+	inputEvents.clear()
+	for a in range(heldActions.size()):
+		heldActions[a] = Input.is_action_pressed(keycodes[a] if a < 8 else prefix + "digital_turntable_rew")
 
-	# Scratch held while a digital direction is held or just after the analog turntable moved
-	pressed[7] = not adjusting and (Input.is_action_pressed(prefix + "digital_turntable_fwd") or Input.is_action_pressed(prefix + "digital_turntable_rew") \
-		or scratchActive != 0.0)
-
-	for i in range(0, 8):
-		if (Input.is_action_just_pressed(keycodes[i])) and not adjusting:
+func updateInputState(events : Array) -> void:
+	# Each press and release is judged at its own time: the song position of the frame, minus the time since the event
+	var framePos : float = currentSongPos
+	for event in events:
+		currentSongPos = minf(framePos, framePos - (frameUsec - event[0]) / 1000000.0 * playRate)
+		var i : int = event[1]
+		if event[2]:
+			if adjusting:
+				continue
 			if i != 7:
 				pressed[i] = true
 			if not keyPressed(i):
 				emptyPress(i)
-		if (Input.is_action_just_released(keycodes[i]) and i != 7):
+		elif i != 7:
 			pressed[i] = false
-		if (pressed[i] == false and shouldPress[i] and not (AUTOSCRATCH and i == 7)):
-			# Long note released, too early it is a POOR
-			var judgement : String = Judge.judge(currentSongPos - shouldPressEnd[i])
-			endLongnote(i, judgement if judgement != "" else "Poor", currentSongPos - shouldPressEnd[i] if judgement != "" else 0.0)
+			releaseLongnote(i)
+	currentSongPos = framePos
+
+	updateAnalogScratch()
+	# Scratch held while a digital direction is held or just after the analog turntable moved
+	pressed[7] = not adjusting and (Input.is_action_pressed(prefix + "digital_turntable_fwd") or Input.is_action_pressed(prefix + "digital_turntable_rew") \
+		or scratchActive != 0.0)
+	for i in range(0, 8):
+		releaseLongnote(i)
+
+# A held long note whose key is up: released too early it is a POOR
+func releaseLongnote(i : int) -> void:
+	if pressed[i] or not shouldPress[i] or (AUTOSCRATCH and i == 7):
+		return
+	var judgement : String = Judge.judge(currentSongPos - shouldPressEnd[i])
+	endLongnote(i, judgement if judgement != "" else "Poor", currentSongPos - shouldPressEnd[i] if judgement != "" else 0.0)
 
 func dequeue() -> void:
 	for i in range(0, 8):
@@ -1163,6 +1205,7 @@ func playSection(from : float, to : float, begin : float, rate : float) -> void:
 	musicStarted = false
 	gaveUp = false
 	done = false
+	resetInputs()
 	startUsec = Time.get_ticks_usec()
 	set_process(true)
 

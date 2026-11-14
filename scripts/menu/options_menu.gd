@@ -52,7 +52,7 @@ enum Level { CATEGORIES, ITEMS, EDIT, NAME, CALIBRATION, CONTROLLER }
 var categories = [
 	{"title": ["DISPLAY", "SETTINGS"], "icon": "display", "desc": "Window and judgement display.", "items": [
 		{"name": "FULL SCREEN", "var": "fullscreen", "type": "bool", "desc": "Play in a window or in full screen."},
-		{"name": "V-SYNC", "var": "vsync", "type": "bool", "desc": "Sync the frames with the screen. OFF lowers the input lag but may tear."},
+		{"name": "V-SYNC", "var": "vsync", "type": "bool", "desc": "Sync the frames with the screen. In game the inputs are read up to 1000 times per second either way. OFF may tear."},
 		{"name": "TIMING DISPLAY", "var": "show_timing", "type": "bool", "desc": "Show the timing error in ms under the judgement."},
 	]},
 	{"title": ["SOUND", "SETTINGS"], "icon": "sound", "desc": "Volume and audio latency.", "items": [

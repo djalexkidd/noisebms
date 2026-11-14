@@ -146,13 +146,25 @@ func save_settings() -> void:
 		config.set_value("settings", setting, get(setting))
 	config.save(SETTINGS_PATH)
 
+# Godot reads the inputs once per loop of the engine: in game the loop runs up to GAME_MAX_FPS times per second,
+# so a key is timed within about a millisecond instead of a frame of the screen (16.7 ms at 60 Hz).
+# V-SYNC uses the mailbox mode there: no tearing, but the loop does not wait for the screen (falls back to ON if not supported)
+const GAME_MAX_FPS = 1000
+
+func set_game_loop(playing : bool) -> void:
+	Engine.max_fps = GAME_MAX_FPS if playing else 0
+	var mode = DisplayServer.VSYNC_DISABLED
+	if vsync:
+		mode = DisplayServer.VSYNC_MAILBOX if playing else DisplayServer.VSYNC_ENABLED
+	DisplayServer.window_set_vsync_mode(mode)
+
 func apply_settings() -> void:
 	# Only a desktop window can leave full screen
 	if OS.has_feature("pc"):
 		var fullscreen_mode = DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
 		if fullscreen != fullscreen_mode:
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN if fullscreen else DisplayServer.WINDOW_MODE_WINDOWED)
-	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_ENABLED if vsync else DisplayServer.VSYNC_DISABLED)
+	set_game_loop(false)
 	AudioServer.set_bus_volume_db(0, linear_to_db(master_volume / 100.0))
 
 # The "<" key (ISO, left of W/Z) is KEY_SECTION in project.godot (X11, Windows, macOS),

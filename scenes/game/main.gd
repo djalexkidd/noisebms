@@ -30,6 +30,8 @@ var trainingPanel : Control = null
 var repeatTimer : Timer = null
 
 func _ready() -> void:
+	# The inputs are read up to 1000 times per second while playing
+	Global.set_game_loop(true)
 	# Netplay plays alone on this machine, the other side shows the live ranking
 	var versus : bool = Global.p1_joined and Global.p2_joined
 	netplay = not versus and Netplay.in_round()
@@ -82,6 +84,9 @@ func _ready() -> void:
 			info.get("artist", ""), Loader.chart_difficulty, info.get("level", 0))
 	if Training.active:
 		setupTraining(decide)
+
+func _exit_tree() -> void:
+	Global.set_game_loop(false)
 
 func _process(_delta : float) -> void:
 	queue_redraw()
