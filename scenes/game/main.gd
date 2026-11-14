@@ -120,6 +120,13 @@ func playerFinished() -> void:
 	playersDone += 1
 	if playersDone < 2:
 		return
+	# Both players gave up or emptied their HARD gauge: STAGE FAILED, the doors close before the results
+	if [1, 2].all(func(player : int) -> bool: return Global.get_player_var(player, "failed")):
+		$P1.stopMusic()
+		await StageFailed.show_on(self).closed
+		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+		get_tree().change_scene_to_file("res://scenes/result/result.tscn")
+		return
 	# Both players are done, the highest score wins
 	for player in [1, 2]:
 		var result : String = Global.get_versus_result(player)

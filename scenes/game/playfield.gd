@@ -94,6 +94,11 @@ const FULL_COMBO_WAVELENGTH : float = 140.0
 const FULL_COMBO_STEP : float = 5.0
 const FULL_COMBO_FLASH_TIME : float = 0.35
 const FULL_COMBO_COLOR : Color = Color(0.4, 0.8, 1.0)
+# META must be held this long to give up (instant in TRAINING), HOLD TO RETIRE shows the progress
+const RETIRE_HOLD_MS : int = 2000
+const RETIRE_Y : float = 200.0
+const RETIRE_SIZE : int = 22
+const RETIRE_COLOR : Color = Color(1, 0.2, 0.1)
 const FONT : Font = preload("res://assets/font/04B_20__.TTF")
 const NUMBER_FONT : Font = preload("res://assets/font/digitalix.ttf")
 const MEASURE_COLOR : Color = Color(0.6, 0.6, 0.65, 0.6)
@@ -220,6 +225,8 @@ var shouldPressEnd : Array   = [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0, -1.0]
 var hitFlash       : Array   = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 # Flag to check if the game is over
 var done           : bool    = false
+# When META started to be held (ms), -1 when it is not
+var retireMs       : int     = -1
 # Current combo count
 var combo          : int     = 0
 # Maximum number of combos
@@ -662,8 +669,13 @@ func _process(delta) -> void:
 		line.position.y = notePosition(line.get_meta("time"))
 		if line.position.y >= judgeY():
 			line.queue_free()
-	# Give up (works in auto play too)
+	# Give up by holding META (works in auto play too), at once in TRAINING
 	if Input.is_action_just_pressed(prefix + "meta"):
+		retireMs = Time.get_ticks_msec()
+	elif not Input.is_action_pressed(prefix + "meta"):
+		retireMs = -1
+	if retireMs >= 0 and (Training.active or Time.get_ticks_msec() - retireMs >= RETIRE_HOLD_MS):
+		retireMs = -1
 		finish(true)
 		return
 	# Check auto play
@@ -1043,13 +1055,17 @@ func killGarbage() -> void:
 			if (n.position.y - n.effect.size.y >= 600 and not queue[i-1].has(n)):
 				n.free()
 
-# Stop playing and clear the lanes
-func stop() -> void:
+# Stop playing and clear the lanes, or leave them frozen (STAGE FAILED)
+func stop(clear : bool = true) -> void:
 	done = true
 	set_process(false)
+	retireMs = -1
 	pressed.fill(false)
 	hitFlash.fill(0.0)
 	queue_redraw()
+	overlay.queue_redraw()
+	if not clear:
+		return
 	for i in $sublinecontainer.get_children(): i.free()
 	for i in range(1, 9):
 		for n in get_node("container" + str(i)).get_children():
@@ -1064,9 +1080,13 @@ func finish(failed : bool) -> void:
 		return
 	if done:
 		return
-	stop()
+	# STAGE FAILED (given up or HARD gauge empty) freezes the lanes, the doors close over them
+	var stageFailed : bool = failed and not versus and not Training.active and not Loader.editor_test
+	stop(not stageFailed)
 	if partner:
-		partner.stop()
+		partner.stop(not stageFailed)
+	if stageFailed:
+		stopMusic()
 	# TRAINING: back to the panel of main.gd, nothing is saved
 	if Training.active:
 		gaveUp = failed
@@ -1100,6 +1120,8 @@ func finish(failed : bool) -> void:
 			"failed": failed, "gauge": int(shownGauge()), "combo_max": comboMax, "counts": judgeCounts,
 			"auto_play": AUTOPLAY,
 		})
+		if stageFailed:
+			await StageFailed.show_on(get_tree().current_scene).closed
 		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 		get_tree().change_scene_to_file("res://scenes/netplay/result.tscn")
 	elif versus:
@@ -1118,8 +1140,36 @@ func finish(failed : bool) -> void:
 			Scores.save_play(player, Loader.file_path, Loader.chart_difficulty, double)
 		if Arcade.active:
 			Arcade.add_stage(player)
+		if stageFailed:
+			await StageFailed.show_on(get_tree().current_scene).closed
 		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 		get_tree().change_scene_to_file("res://scenes/result/result.tscn")
+
+# Stop the music and the keysounds (STAGE FAILED)
+func stopMusic() -> void:
+	if keysoundPlayer:
+		keysoundPlayer.stop()
+	var player_node : Node = get_node_or_null(audio)
+	if player_node:
+		player_node.stop()
+
+# HOLD TO RETIRE over the key lanes while META is held, with the time left to hold it
+func drawRetire(canvas : CanvasItem) -> void:
+	if retireMs < 0 or Training.active or done:
+		return
+	var progress : float = clampf((Time.get_ticks_msec() - retireMs) / float(RETIRE_HOLD_MS), 0.0, 1.0)
+	var text : String = "HOLD TO RETIRE"
+	var color : Color = RETIRE_COLOR if (Time.get_ticks_msec() / 250) % 2 == 0 else Color.WHITE
+	# Narrowed to fit the key lanes, like the judgement
+	var width : float = FONT.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, RETIRE_SIZE).x
+	var zoom : float = minf(1.0, (7 * KEY_WIDTH - 8) / width)
+	canvas.draw_set_transform(Vector2(keysCenter(), RETIRE_Y), 0.0, Vector2(zoom, zoom))
+	canvas.draw_string_outline(FONT, Vector2(-width / 2.0, 0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, RETIRE_SIZE, 8, Color.BLACK)
+	canvas.draw_string(FONT, Vector2(-width / 2.0, 0), text, HORIZONTAL_ALIGNMENT_LEFT, -1, RETIRE_SIZE, color)
+	canvas.draw_set_transform(Vector2.ZERO)
+	var bar := Rect2(keysCenter() - 100, RETIRE_Y + 12, 200, 8)
+	canvas.draw_rect(bar.grow(2), Color.BLACK)
+	canvas.draw_rect(Rect2(bar.position, Vector2(bar.size.x * progress, bar.size.y)), RETIRE_COLOR)
 
 # TRAINING: keep the whole chart, the sections are taken from it
 func prepareTraining() -> void:
@@ -1768,3 +1818,4 @@ class Overlay extends Node2D:
 				field.drawPacemaker(self)
 		field.drawBursts(self)
 		field.drawJudge(self)
+		field.drawRetire(self)

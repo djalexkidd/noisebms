@@ -66,6 +66,7 @@ scenes/
   game/playfield.gd/.tscn Un terrain (class_name Playfield) : chart, notes, jugement, layout (lanes, touches, jauge, HUD) ; le côté non joué reste affiché, vide et assombri
   game/note.gd           Une note (normale ou longue) qui descend
   game/decide.gd         Écran DECIDE (titre, difficulté, GAME OPTION des joueurs) posé par main.gd avant la partie
+  game/stage_failed.gd   Écran STAGE FAILED (class_name StageFailed) : portes qui se ferment, puis fondu au noir (voir plus bas)
   game/judge.gd          Règles IIDX : fenêtres, EX-Score, jauge (class_name Judge)
   menu/                  Scènes des menus
   result/result.tscn     Écran de résultats (solo et versus local)
@@ -90,6 +91,11 @@ En solo (hors autoplay), il enregistre aussi la partie avec `Scores.save_play()`
 Comme sur IIDX après le choix d'une musique, dessiné dans `_draw()` avec la DA de la barre du bas (rouge, orange, segments) : en haut à gauche une barre rouge et des légendes tapées (noiseBMS, MUSIC DECIDE, SP/DP et touches), à droite DIFFICULTY, le nom (couleur de `song_entry.difficulty_color()`) et le niveau ; au milieu une bande avec une grille orange qui défile vers la droite (comme `grid.png`, `GRID_CELL`, `GRID_SPEED`), des lignes orange et des traits jaunes, avec le stage en ARCADE (sinon NETPLAY ou le type de fichier), le titre et l'artiste ; en bas un panneau GAME OPTION par joueur (2 × 6 options, celles choisies s'allument une à une ; ABSENCE pour un côté vide, DOUBLE PLAY pour l'autre côté du DP).
 - Écran fixe pendant le chargement, puis la bande s'ouvre, tout entre, reste jusqu'à `HOLD_TIME` et s'efface en `OUT_TIME` ; il émet `closed` et libère son calque.
 - `playfield.start()` attend `decide.closed` avant Get Ready. En netplay, le joueur signale `mark_loaded()` avant d'attendre l'écran, puis `wait_begin()` : l'écran se joue au lancement du round, jamais dans la sélection du netplay.
+
+### Abandon et STAGE FAILED (`playfield.gd`, `stage_failed.gd`)
+- **META maintenu** `RETIRE_HOLD_MS` (2 s) abandonne la musique (`retireMs`, aussi en autoplay) ; pendant le maintien, « HOLD TO RETIRE » clignote au-dessus des lanes avec une barre de progression (`drawRetire()`, dans `Overlay`). En TRAINING, META reste instantané.
+- Abandon ou jauge HARD vide (`finish(true)`), hors versus, TRAINING et test de l'éditeur : les lanes se figent (`stop(false)`), la musique s'arrête (`stopMusic()`), puis `StageFailed.show_on()` pose par-dessus tout (`CanvasLayer` `LAYER`) deux portes grises qui claquent depuis le haut et le bas (`CLOSE_TIME`, la porte du bas est celle du haut tournée de 180°), STAGE FAILED en rouge au milieu, `HOLD_TIME` (1 s) puis fondu au noir (`FADE_TIME`) et `closed` ; ensuite l'écran de résultats (ou celui du netplay, le résultat est envoyé avant).
+- En versus, chaque joueur qui échoue a son « Failed » ; si les deux ont échoué, `main.playerFinished()` joue les portes au lieu des bandeaux WIN/LOSE.
 
 ### Écran de résultats (`scripts/result/`)
 Un seul écran comme sur IIDX : 1P à gauche, 2P à droite (un seul panneau en solo, du côté du joueur), la musique au milieu, WIN/LOSE en versus. Pas d'image de fond pour l'instant.
