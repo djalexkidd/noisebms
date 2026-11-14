@@ -7,6 +7,8 @@ const ResultPanel = preload("res://scripts/result/result_panel.gd")
 const TITLE_FONT = preload("res://assets/font/04B_20__.TTF")
 const FONT = preload("res://assets/font/FT2FONT.TTF")
 const SONG_FONT = preload("res://assets/font/monofonto.otf")
+# Applause with the lamp banner when a player cleared the song
+const CLEAR_SOUND = preload("res://assets/bgm/clear.ogg")
 
 const BACKGROUND_TOP = Color(0.02, 0.02, 0.06)
 const BACKGROUND_BOTTOM = Color(0.07, 0.03, 0.12)
@@ -17,13 +19,19 @@ const PANEL_TOP = 74.0
 # Rings turning behind the middle, in place of the IIDX character art
 const RING_CENTER = Vector2(640, 360)
 const RING_RADII = [70.0, 105.0, 140.0, 175.0]
-const GAME_OVER_TIME = 3.0
+# Clear lamp banner shown before the panels: time on screen, sliding in, closing
+const LAMP_TIME = 2.2
+const LAMP_IN = 0.35
+const LAMP_OUT = 0.3
+const LAMP_BAND_HEIGHT = 120.0
+# Lamps with rainbow letters (FULL COMBO, PERFECT)
+const RAINBOW_LAMP = 5
 
 var panels : Array = []
 var elapsed := 0.0
 var versus := false
-# Arcade: time of the GAME OVER after a failed stage, negative before
-var game_over_at := -1.0
+# The lamp banner closes at this time, the panels come after it
+var lamp_end := LAMP_TIME
 
 func _ready() -> void:
 	versus = Global.p1_joined and Global.p2_joined
@@ -34,12 +42,22 @@ func _ready() -> void:
 		add_child(panel)
 		panel.position = Vector2(MARGIN if player == 1 else get_viewport_rect().size.x - MARGIN - panel.size.x, PANEL_TOP)
 		panels.append(panel)
+		# The panels wait for the end of the lamp banner
+		panel.elapsed = -LAMP_TIME
+		panel.visible = false
+	if panels.any(func(panel): return panel.lamp > 0):
+		var applause = AudioStreamPlayer.new()
+		applause.stream = CLEAR_SOUND
+		add_child(applause)
+		applause.play()
 	# The panels have read the results
 	Global.failed = false
 	Global.p2_failed = false
 
 func _process(delta: float) -> void:
 	elapsed += delta
+	for panel in panels:
+		panel.visible = panel.elapsed >= 0.0
 	queue_redraw()
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -50,7 +68,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not confirm:
 		return
 	get_viewport().set_input_as_handled()
-	if game_over_at >= 0.0:
+	# The first press closes the lamp banner
+	if elapsed < lamp_end - LAMP_OUT:
+		skip_lamp()
 		return
 	# The first press ends the reveal, the next one leaves
 	if not panels.all(func(panel): return panel.revealed()):
@@ -62,22 +82,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		Global.set_player_var(player, "ex_score", 0)
 		Global.set_player_var(player, "combo_max", 0)
 	if Arcade.active and Arcade.game_over():
-		game_over()
-		return
-	if Arcade.active and Arcade.finished():
+		get_tree().change_scene_to_file("res://scenes/arcade/game_over.tscn")
+	elif Arcade.active and Arcade.finished():
 		get_tree().change_scene_to_file("res://scenes/arcade/name_entry.tscn")
 	else:
 		get_tree().change_scene_to_file("res://scenes/menu/music_select.tscn")
 
-# A stage failed by every player ends the arcade game, back to the title menu
-func game_over() -> void:
-	game_over_at = elapsed
-	Arcade.stop()
-	# The panels are drawn over the screen, they fade out under GAME OVER
+# The banner closes now, the panels start right after
+func skip_lamp() -> void:
+	lamp_end = elapsed + LAMP_OUT
 	for panel in panels:
-		create_tween().tween_property(panel, "modulate:a", 0.15, 0.4)
-	await get_tree().create_timer(GAME_OVER_TIME).timeout
-	get_tree().change_scene_to_file("res://scenes/menu/main_menu.tscn")
+		panel.elapsed = maxf(panel.elapsed, -LAMP_OUT)
 
 func _draw() -> void:
 	# Background: a dark gradient and slanted stripes
@@ -98,7 +113,7 @@ func _draw() -> void:
 
 	# Title
 	var title = "STAGE RESULT" if not Netplay.active else "RESULT"
-	if (Arcade.active or game_over_at >= 0.0) and not Arcade.stages.is_empty():
+	if Arcade.active and not Arcade.stages.is_empty():
 		title = Arcade.stage_name(Arcade.stages.size() - 1) + " RESULT"
 	var title_size = 32
 	var title_width = TITLE_FONT.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, title_size).x
@@ -108,7 +123,7 @@ func _draw() -> void:
 
 	# Versus: WIN, LOSE or DRAW on each side of the middle
 	if versus:
-		var shown = clampf((elapsed - 1.2) / 0.3, 0.0, 1.0)
+		var shown = clampf((panels[0].elapsed - 1.2) / 0.3, 0.0, 1.0)
 		for player in [1, 2]:
 			var result = Global.get_versus_result(player)
 			var color : Color = Global.VERSUS_RESULT_COLORS[result]
@@ -127,16 +142,56 @@ func _draw() -> void:
 	if panels.all(func(panel): return panel.revealed()) and Time.get_ticks_msec() % 1000 < 650:
 		draw_centered(TITLE_FONT, Rect2(470, 684, 340, 24), "PRESS START", 14, Color(1, 0.85, 0.2))
 
-	if game_over_at >= 0.0:
-		draw_game_over(elapsed - game_over_at)
+	if elapsed < lamp_end:
+		draw_lamp_banner()
 
-# The screen goes dark and GAME OVER comes down
-func draw_game_over(time: float) -> void:
-	draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, clampf(time / 0.4, 0.0, 0.85)))
-	var drop = 1.0 - ease(clampf((time - 0.2) / 0.5, 0.0, 1.0), 0.3)
-	var band = Rect2(0, size.y / 2 - 60 - drop * 200, size.x, 120)
-	draw_rect(band, Color(0.5, 0, 0, 0.6 * (1.0 - drop)))
-	draw_centered(TITLE_FONT, band, "GAME OVER", 72, Color(1, 0.15, 0.1, 1.0 - drop), 12, Color(0.2, 0, 0, 1.0 - drop))
+# The clear lamp of the play (CLEAR, HARD CLEAR, FAILED...) in a band across the middle:
+# it slides in from the left, a light sweeps over it, then it closes. In versus, one half per player.
+func draw_lamp_banner() -> void:
+	var slide = ease(clampf(elapsed / LAMP_IN, 0.0, 1.0), 0.3)
+	var close = clampf((elapsed - (lamp_end - LAMP_OUT)) / LAMP_OUT, 0.0, 1.0)
+	var open = 1.0 - close
+	draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, 0.6 * slide * open))
+	var height = LAMP_BAND_HEIGHT * open
+	var band = Rect2(-size.x * (1.0 - slide), size.y / 2 - height / 2, size.x, height)
+	var lamps = panels.map(func(panel): return panel.lamp)
+	var best_lamp : int = lamps.max()
+	var color : Color = Scores.LAMP_COLORS[best_lamp]
+	draw_rect(band, Color(color.darkened(0.8), 0.85))
+	# Light sweeping from left to right, inside the band
+	var sweep = band.position.x + fmod(elapsed * 900.0, size.x + 400.0) - 200.0
+	var skew = height * 0.4
+	draw_colored_polygon(PackedVector2Array([Vector2(sweep, band.position.y), Vector2(sweep + 80, band.position.y),
+		Vector2(sweep + 80 - skew, band.end.y), Vector2(sweep - skew, band.end.y)]), Color(1, 1, 1, 0.08))
+	draw_rect(Rect2(band.position.x, band.position.y - 3, band.size.x, 3), color)
+	draw_rect(Rect2(band.position.x, band.end.y, band.size.x, 3), color)
+	if height < 40.0:
+		return
+	if lamps.size() == 1:
+		draw_lamp_text(band, Scores.LAMPS[lamps[0]], 72, lamps[0])
+		return
+	for i in panels.size():
+		var half = Rect2(band.position.x + band.size.x / 2 * i, band.position.y, band.size.x / 2, band.size.y)
+		draw_centered(TITLE_FONT, Rect2(half.position + Vector2(0, 8), Vector2(half.size.x, 20)), "%dP" % panels[i].player, 16, TEXT_DIM)
+		draw_lamp_text(half.grow_individual(-24, -16, -24, 0), Scores.LAMPS[lamps[i]], 44, lamps[i])
+
+# A lamp name centered in a box, made smaller if it does not fit, with rainbow letters for FULL COMBO and PERFECT
+func draw_lamp_text(rect: Rect2, text: String, font_size: int, lamp: int) -> void:
+	var color : Color = Scores.LAMP_COLORS[lamp]
+	if lamp < RAINBOW_LAMP:
+		draw_centered(TITLE_FONT, rect, text, font_size, color, 12, Color(color.darkened(0.75), 0.9))
+		return
+	while font_size > 8 and TITLE_FONT.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > rect.size.x:
+		font_size -= 1
+	var width = TITLE_FONT.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+	var baseline = rect.position.y + (rect.size.y + TITLE_FONT.get_ascent(font_size) - TITLE_FONT.get_descent(font_size)) / 2
+	var x = rect.get_center().x - width / 2
+	draw_string_outline(TITLE_FONT, Vector2(x, baseline), text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, 12, Color(0.05, 0.05, 0.1, 0.9))
+	for i in text.length():
+		var at = Vector2(x + TITLE_FONT.get_string_size(text.left(i), HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x, baseline)
+		# PERFECT is paler than FULL COMBO
+		var letter_color = Color.from_hsv(fmod(elapsed * 0.6 + i * 0.07, 1.0), 0.45 if lamp > RAINBOW_LAMP else 0.8, 1.0)
+		draw_string(TITLE_FONT, at, text[i], HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, letter_color)
 
 # Text centered in a box, made smaller if it does not fit
 func draw_centered(font: Font, rect: Rect2, text: String, font_size: int, color: Color, outline := 0, outline_color := Color.BLACK) -> void:
