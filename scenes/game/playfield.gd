@@ -1112,6 +1112,9 @@ func finish(failed : bool) -> void:
 		"gauge_history": gaugeHistory, "previous_best": Scores.get_best(Loader.file_path, Loader.chart_difficulty, double).duplicate(),
 	})
 	Global.song_info = songInfo.merged({"difficulty": Loader.chart_difficulty, "double": double})
+	# Statistics of the STATS menu, the autoplay is not counted
+	if not AUTOPLAY:
+		PlayStats.add_play(player, double, currentSongPos - QuaChart.LEAD_IN, noteCount, judgeCounts, fastCount, slowCount)
 	if netplay:
 		if not AUTOPLAY:
 			Scores.save_play(player, Loader.file_path, Loader.chart_difficulty)

@@ -57,6 +57,8 @@ static func add_stage(player: int) -> void:
 	if not stages.is_empty() and not stages[-1]["players"].has(player) and stages[-1]["path"] == Loader.file_path:
 		stages[-1]["players"][player] = result
 		return
+	if stages.is_empty():
+		PlayStats.add_arcade_game()
 	stages.append({
 		"path": Loader.file_path, "difficulty": Loader.chart_difficulty,
 		"title": Global.song_info.get("title", ""), "level": Global.song_info.get("level", 0),

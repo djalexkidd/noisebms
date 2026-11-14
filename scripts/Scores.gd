@@ -79,5 +79,7 @@ static func save_play(player: int, path: String, difficulty_name: String, double
 	if miss_count >= 0 and not Global.get_player_var(player, "failed"):
 		best["miss_count"] = mini(best.get("miss_count", miss_count), miss_count)
 	best["play_count"] = best.get("play_count", 0) + 1
+	# Level of the chart, for the difficulty groups of the STATS menu
+	best["level"] = Global.song_info.get("level", 0)
 	config.set_value(path, key(difficulty_name, double), best)
 	config.save(PATH)

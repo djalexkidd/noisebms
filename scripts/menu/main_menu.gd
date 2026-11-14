@@ -44,6 +44,7 @@ var modes = [
 	{"name": "TRAINING", "short": "TRAIN", "icon": "training", "scene": "res://scenes/menu/music_select.tscn", "training": true, "desc": "PRACTICE A SECTION OF A SONG, AT NORMAL SPEED OR SLOWER."},
 	{"name": "EDITOR", "short": "EDIT", "icon": "editor", "scene": "res://scenes/editor/editor.tscn", "desc": "CREATE AND EDIT KEYSOUNDED BMS CHARTS FROM YOUR SONGS."},
 	{"name": "CUSTOMIZE", "short": "CUSTOM", "icon": "customize", "scene": "res://scenes/menu/customization_menu.tscn", "desc": "CHANGE THE PLAYFIELD, THE TURNTABLE, THE BACKGROUND AND THE MUSIC."},
+	{"name": "STATS", "short": "STATS", "icon": "stats", "scene": "res://scenes/menu/stats_menu.tscn", "desc": "THE ARCADE RANKINGS AND YOUR PLAY STATISTICS."},
 	{"name": "OPTIONS", "short": "OPTION", "icon": "options", "scene": "res://scenes/menu/options.tscn", "desc": "DISPLAY, SOUND, DJ NAME AND CONTROLLERS."},
 	{"name": "DOWNLOAD", "short": "DL", "icon": "download", "scene": "res://scenes/menu/download.tscn", "desc": "IMPORT NEW SONGS INTO THE GAME."},
 ]
@@ -520,6 +521,12 @@ func draw_icon(icon: String, center: Vector2, icon_color: Color) -> void:
 				draw_circle(center + dot, 2.5, icon_color)
 			draw_line(center + Vector2(2, 10), center + Vector2(16, -14), icon_color, 4.0)
 			draw_colored_polygon([center + Vector2(-2, 16), center + Vector2(0, 8), center + Vector2(5, 11)], icon_color)
+		"stats":
+			# Bars of a chart
+			for bar in 4:
+				var height = [12.0, 22.0, 16.0, 30.0][bar]
+				draw_rect(Rect2(center + Vector2(-16 + bar * 9, 16 - height), Vector2(6, height)), icon_color)
+			draw_rect(Rect2(center + Vector2(-18, 16), Vector2(36, 3)), icon_color)
 		"options":
 			for i in 8:
 				var direction = Vector2.from_angle(i * TAU / 8)
