@@ -1,6 +1,6 @@
 extends Control
 
-# GAME OVER of the ARCADE mode, after a stage failed by every player: the letters of GAME OVER fall
+# GAME OVER of the ARCADE mode, after a stage failed by every player or after the ranking: the letters of GAME OVER fall
 # one by one on a red grid floor, then THANKS FOR PLAYING ! is typed under them and the screen fades
 # to black, back to the title menu. A key skips to the fade.
 

@@ -146,7 +146,8 @@ func leave() -> void:
 		await get_tree().create_timer(0.25).timeout
 		get_tree().change_scene_to_file(STATS_MENU_SCENE)
 		return
-	get_tree().change_scene_to_file("res://scenes/menu/main_menu.tscn")
+	# End of an ARCADE game, cleared or not: GAME OVER, then the main menu
+	get_tree().change_scene_to_file("res://scenes/arcade/game_over.tscn")
 
 func draw_text(font: Font, at: Vector2, text: String, font_size: int, text_color: Color, alignment := HORIZONTAL_ALIGNMENT_LEFT, outline := 0, outline_color := Color.BLACK) -> void:
 	var width = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x

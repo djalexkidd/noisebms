@@ -425,18 +425,9 @@ func _draw() -> void:
 
 func draw_body() -> void:
 	var top = body_top()
-	var right = size.x - 20
 	draw_rect(Rect2(0, top, size.x, body_bottom() - top), PANEL)
 	draw_rect(Rect2(0, top + 4, size.x, 3), ORANGE)
 	draw_rect(Rect2(0, body_bottom() - 7, size.x, 3), ORANGE)
-
-	# Help banner, top right
-	var help = "TURNTABLE: SELECT    WHITE: SET    BLACK: EXIT    EFFECT: DEFAULT"
-	var banner_left = right - 640
-	draw_colored_polygon([Vector2(banner_left - 40, top + 12), Vector2(right, top + 12), Vector2(right, top + 46), Vector2(banner_left, top + 46)], YELLOW)
-	draw_colored_polygon([Vector2(banner_left - 70, top + 12), Vector2(banner_left - 52, top + 12), Vector2(banner_left - 16, top + 46), Vector2(banner_left - 34, top + 46)], ORANGE)
-	draw_rect(Rect2(right - 6, top + 12, 6, 34), Color.BLACK)
-	draw_text(TITLE_FONT, Vector2((banner_left + right) / 2, top + 36), help, fit_size(TITLE_FONT, help, 14, right - banner_left - 30), Color.BLACK, HORIZONTAL_ALIGNMENT_CENTER)
 
 	# Corner brackets around the rows
 	var area = Rect2(ROWS_LEFT - 12, section_top(0) - 6, size.x - ROWS_LEFT - 8, sections.size() * SECTION_HEIGHT + 4)
