@@ -55,6 +55,9 @@ var categories = [
 		{"name": "V-SYNC", "var": "vsync", "type": "bool", "desc": "Sync the frames with the screen. In game the inputs are read up to 1000 times per second either way. OFF may tear."},
 		{"name": "TIMING DISPLAY", "var": "show_timing", "type": "bool", "desc": "Show the timing error in ms under the judgement."},
 	]},
+	{"title": ["VIDEO", "SETTINGS"], "icon": "video", "desc": "Animations shown while playing.", "items": [
+		{"name": "COPPER BARS", "var": "copper_bars", "type": "bool", "desc": "Amiga demo copper bars between the playfields when playing a module (.MOD, .XM)."},
+	]},
 	{"title": ["SOUND", "SETTINGS"], "icon": "sound", "desc": "Volume and audio latency.", "items": [
 		{"name": "MASTER VOLUME", "var": "master_volume", "type": "int", "min": 0, "max": 100, "step": 5, "format": "%d %%", "desc": "Volume of the whole game."},
 		{"name": "AUDIO OFFSET", "var": "audio_offset", "type": "int", "min": -500, "max": 500, "step": 5, "format": "%+d MS", "desc": "Delay of the sound (bluetooth headphones...), positive when it comes late."},
@@ -613,6 +616,13 @@ func draw_icon(icon: String, center: Vector2, icon_color: Color) -> void:
 			draw_rect(Rect2(center - Vector2(40, 30), Vector2(80, 52)), icon_color, false, 5.0)
 			draw_rect(Rect2(center - Vector2(30, 21), Vector2(60, 34)), Color(icon_color, icon_color.a * 0.25))
 			draw_rect(Rect2(center + Vector2(-18, 22), Vector2(36, 6)), icon_color)
+		"video":
+			# Film strip with a play triangle
+			draw_rect(Rect2(center - Vector2(42, 28), Vector2(84, 56)), icon_color, false, 5.0)
+			for hole in 5:
+				draw_rect(Rect2(center + Vector2(-34 + hole * 15, -22), Vector2(8, 6)), icon_color)
+				draw_rect(Rect2(center + Vector2(-34 + hole * 15, 16), Vector2(8, 6)), icon_color)
+			draw_colored_polygon([center + Vector2(-10, -11), center + Vector2(14, 0), center + Vector2(-10, 11)], icon_color)
 		"sound":
 			draw_arc(center + Vector2(0, 4), 30, PI, TAU, 24, icon_color, 6.0)
 			draw_rect(Rect2(center + Vector2(-38, 2), Vector2(14, 28)), icon_color)

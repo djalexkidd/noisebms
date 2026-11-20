@@ -82,6 +82,8 @@ var show_timing = false
 var audio_offset = 0
 var fullscreen = false
 var vsync = true
+# Copper bars between the playfields while a module plays (VIDEO SETTINGS)
+var copper_bars = true
 # Volume of the Master bus, in percent
 var master_volume = 100
 # The welcome screen shows once, on the first start
@@ -93,6 +95,7 @@ const SETTINGS_PATH = "user://settings.cfg"
 const SETTING_DEFAULTS = {
 	"fullscreen": false,
 	"vsync": true,
+	"copper_bars": true,
 	"show_timing": false,
 	"master_volume": 100,
 	"audio_offset": 0,

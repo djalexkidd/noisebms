@@ -11,6 +11,9 @@ const MIX_RATE : int = 8363
 const STEREO_SEPARATION : float = 0.6
 # Notes panned less than this play in the center (FastTracker modules)
 const PAN_CENTER : float = 0.25
+# Time measured by channelLevel(), and the number of values it reads
+const LEVEL_WINDOW : float = 0.03
+const LEVEL_READS : int = 256
 
 var module : ModModule
 var playing : bool = false
@@ -25,6 +28,9 @@ var voices : Array = []
 # Note played by each voice (-1 if none) and its next envelope value
 var voiceNote : PackedInt32Array = []
 var voiceEnv : PackedInt32Array = []
+# Volume (0~1) and sample of the note of each voice, for the copper bars (channelLevel())
+var voiceVolume : PackedFloat32Array = []
+var voiceSample : PackedInt32Array = []
 # Number of players having each note in their chart, 0 for background music
 var owners : PackedByteArray = []
 # Notes already played by a hit or by the background music
@@ -64,6 +70,8 @@ func _init(_module : ModModule, send : String = "Master") -> void:
 		voices.append(voice)
 		voiceNote.append(-1)
 		voiceEnv.append(0)
+		voiceVolume.append(0.0)
+		voiceSample.append(-1)
 
 # Bus panning the voices of one side, created once and kept for the next songs
 static func panningBus(side : float, send : String = "Master") -> String:
@@ -105,6 +113,7 @@ func stop() -> void:
 	for c in voices.size():
 		voices[c].stop()
 		voiceNote[c] = -1
+		voiceVolume[c] = 0.0
 
 func get_playback_position() -> float:
 	return startTime + (Time.get_ticks_usec() - startUsec) / 1000000.0 * rate if playing else 0.0
@@ -140,6 +149,7 @@ func _process(_delta) -> void:
 			# Not hit yet: the previous note of the channel stops like in the module
 			voices[c].stop()
 			voiceNote[c] = -1
+			voiceVolume[c] = 0.0
 		nextNote += 1
 	for c in voices.size():
 		updateVoice(c, t, true)
@@ -151,6 +161,7 @@ func trigger(i : int, t : float, on_time : bool) -> void:
 	triggered[i] = 1
 	voiceNote[c] = i
 	voiceEnv[c] = 0
+	voiceSample[c] = note.sample
 	updateVoice(c, t, false)
 	var voice : AudioStreamPlayer = voices[c]
 	voice.bus = buses[0 if note.pan < -PAN_CENTER else (2 if note.pan > PAN_CENTER else 1)]
@@ -177,5 +188,35 @@ func updateVoice(c : int, t : float, retrigger : bool) -> void:
 	var period : float = env[current + 1]
 	if period > 0:
 		voices[c].pitch_scale = module.pitchScale(note.sample, period) * rate
-	var volume : float = env[current + 2] / 64.0 * gain
+	voiceVolume[c] = env[current + 2] / 64.0
+	var volume : float = voiceVolume[c] * gain
 	voices[c].volume_db = linear_to_db(volume) if volume > 0.0 else -80.0
+
+# Sound level (0~1) of a channel: peak of its sample around the playing position, times the volume of the note
+func channelLevel(c : int) -> float:
+	var voice : AudioStreamPlayer = voices[c]
+	if not voice.playing or voiceSample[c] < 0 or voiceVolume[c] <= 0.0:
+		return 0.0
+	var s : Dictionary = module.samples[voiceSample[c]]
+	var data : PackedByteArray = s.data
+	var frames : int = s.frames
+	if data.is_empty() or frames <= 0:
+		return 0.0
+	var position : int = int(voice.get_playback_position() * MIX_RATE)
+	# Frames played during LEVEL_WINDOW, read with at most LEVEL_READS values
+	var count : int = maxi(int(voice.pitch_scale * MIX_RATE * LEVEL_WINDOW), 1)
+	var step : int = maxi(count / LEVEL_READS, 1)
+	var peak : float = 0.0
+	for k in range(0, count, step):
+		var f : int = position + k
+		if f >= frames:
+			if s.loop_type == 0 or s.loop_length <= 0:
+				break
+			f = s.loop_start + (f - s.loop_start) % s.loop_length
+		var value : float
+		if s.bits == 16:
+			value = data.decode_s16(f * 2) / 32768.0
+		else:
+			value = data.decode_s8(f) / 128.0
+		peak = maxf(peak, absf(value))
+	return peak * voiceVolume[c]

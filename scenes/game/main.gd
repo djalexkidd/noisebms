@@ -18,6 +18,7 @@ const DECIDE_LAYER : int = 10
 const TRAINING_PANEL : GDScript = preload("res://scripts/training/training_panel.gd")
 const TRAINING_RECT : Rect2 = Rect2(442, 6, 396, 488)
 const TRAINING_REPEAT_DELAY : float = 1.0
+const COPPER_BARS : GDScript = preload("res://scenes/game/copper_bars.gd")
 
 var playersDone : int = 0
 # Playfields that play, the first one gives the title and the BPM
@@ -76,6 +77,13 @@ func _ready() -> void:
 	for field in playing:
 		field.decide = decide
 		field.start()
+	# Copper bars between the playfields for a module (VIDEO SETTINGS), behind the playfields.
+	# Not in TRAINING, its panel takes the middle
+	if Global.copper_bars and not Training.active and not playing.is_empty() and playing[0].keysoundPlayer is ModPlayer:
+		var bars : Node2D = COPPER_BARS.new()
+		bars.player = playing[0].keysoundPlayer
+		add_child(bars)
+		move_child(bars, 0)
 	var info : Dictionary = playing[0].songInfo if not playing.is_empty() else {}
 	songTitle = info.get("title", "")
 	$Title.text = songTitle
