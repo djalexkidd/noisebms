@@ -190,7 +190,7 @@ func finish() -> void:
 		var dj_name = Netplay.clean_name("".join(entry["chars"]))
 		names[entry["player"]] = dj_name if dj_name != "" else DEFAULT_NAME
 	Arcade.save_ranking(names)
-	Arcade.stop()
+	# Arcade stays active: the ranking then shows GAME OVER, the main menu stops it
 	await get_tree().create_timer(LEAVE_TIME).timeout
 	get_tree().change_scene_to_file("res://scenes/arcade/ranking.tscn")
 
